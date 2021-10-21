@@ -10,7 +10,7 @@ from typing import Tuple, cast
 from PIL import Image
 
 from dlup import SlideImage
-from dlup.background import AvailableMaskFunctions, get_mask
+from dlup.background import AvailableMaskFunctions, get_mask, load_mask
 from dlup.data.dataset import TiledROIsSlideImageDataset
 from dlup.tiling import TilingMode
 from dlup.utils import ArrayEncoder
@@ -25,7 +25,11 @@ def tiling(args: argparse.Namespace):
     tile_overlap = cast(Tuple[int, int], (args.tile_overlap,) * 2)
 
     image = SlideImage.from_file_path(input_file_path)
-    mask = get_mask(slide=image, mask_func=AvailableMaskFunctions[args.mask_func])
+
+    if args.mask_file_path is not None:
+        mask = load_mask(mask_file_path=args.mask_file_path)
+    else:
+        mask = get_mask(slide=image, mask_func=AvailableMaskFunctions[args.mask_func])
 
     # the nparray and PIL.Image.size height and width order are flipped is as it would be as a PIL.Image.
     # Below [::-1] casts the thumbnail_size to the PIL.Image expected size
@@ -189,6 +193,14 @@ def register_parser(parser: argparse._SubParsersAction):
     tiling_parser.set_defaults(do_not_save_tiles=False)
 
     tiling_parser.add_argument("--mask-func", dest="mask_func", type=str, default="improved_fesi")
+
+    tiling_parser.add_argument(
+        "--mask-file-path",
+        dest="mask_file_path",
+        type=pathlib.Path,
+        help="Path to binary mask.png as saved by DLUP",
+        default=None,
+    )
 
     tiling_parser.add_argument(
         "slide_file_path",
