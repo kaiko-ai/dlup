@@ -49,6 +49,7 @@ setup(
         "tqdm",
         "pillow",
         "openslide-python",
+        "cucim"
     ],
     extras_require={
         "dev": [

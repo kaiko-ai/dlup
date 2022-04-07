@@ -13,6 +13,7 @@ other than OpenSlide.
 import errno
 import functools
 import os
+import cucim
 import pathlib
 from typing import Any, Dict, Iterable, Optional, Sequence, Tuple, Type, TypeVar, Union
 
@@ -117,13 +118,16 @@ class SlideImage:
 
     @classmethod
     def from_file_path(
-        cls: Type[_TSlideImage], wsi_file_path: os.PathLike, identifier: Union[str, None] = None
+        cls: Type[_TSlideImage], wsi_file_path: os.PathLike, identifier: Union[str, None] = None, readin_method: str = "openslide"
     ) -> _TSlideImage:
         wsi_file_path = pathlib.Path(wsi_file_path)
         if not wsi_file_path.exists():
             raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), str(wsi_file_path))
         try:
-            wsi = openslide.open_slide(str(wsi_file_path))
+            if readin_method == "openslide":
+                wsi = openslide.open_slide(str(wsi_file_path))
+            elif readin_method == "cucim":
+                wsi = cucim.CuImage(wsi_file_path)
         except (openslide.OpenSlideUnsupportedFormatError, PIL.UnidentifiedImageError):
             raise DlupUnsupportedSlideError(f"Unsupported file: {wsi_file_path}")
 
