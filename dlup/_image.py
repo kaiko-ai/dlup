@@ -88,15 +88,20 @@ class SlideImage:
     >>> wsi = dlup.SlideImage.from_file_path('path/to/slide.svs')
     """
 
-    def __init__(self, wsi: openslide.AbstractSlide, identifier: Union[str, None] = None):
+    def __init__(self, wsi: openslide.AbstractSlide, identifier: Union[str, None] = None, reading_method: str = "openslide"):
         """Initialize a whole slide image and validate its properties."""
         self._openslide_wsi = wsi
         self._identifier = identifier
+        self._reading_method = reading_method
 
         try:
-            mpp_x = float(self._openslide_wsi.properties[openslide.PROPERTY_NAME_MPP_X])
-            mpp_y = float(self._openslide_wsi.properties[openslide.PROPERTY_NAME_MPP_Y])
-            mpp = np.array([mpp_y, mpp_x])
+            if reading_method == "openslide":
+                mpp_x = float(self._openslide_wsi.properties[openslide.PROPERTY_NAME_MPP_X])
+                mpp_y = float(self._openslide_wsi.properties[openslide.PROPERTY_NAME_MPP_Y])
+                mpp = np.array([mpp_y, mpp_x])
+            elif reading_method == "cucim":
+                mpp_value = float(wsi.metadata['aperio']['MPP'])
+                mpp = np.array([mpp_value, mpp_value])
         except KeyError:
             raise DlupUnsupportedSlideError(f"slide property mpp is not available.", identifier)
 
@@ -118,20 +123,20 @@ class SlideImage:
 
     @classmethod
     def from_file_path(
-        cls: Type[_TSlideImage], wsi_file_path: os.PathLike, identifier: Union[str, None] = None, readin_method: str = "openslide"
+        cls: Type[_TSlideImage], wsi_file_path: os.PathLike, identifier: Union[str, None] = None, reading_method: str = "openslide"
     ) -> _TSlideImage:
         wsi_file_path = pathlib.Path(wsi_file_path)
         if not wsi_file_path.exists():
             raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), str(wsi_file_path))
         try:
-            if readin_method == "openslide":
+            if reading_method == "openslide":
                 wsi = openslide.open_slide(str(wsi_file_path))
-            elif readin_method == "cucim":
-                wsi = cucim.CuImage(wsi_file_path)
+            elif reading_method == "cucim":
+                wsi = cucim.CuImage(str(wsi_file_path))
         except (openslide.OpenSlideUnsupportedFormatError, PIL.UnidentifiedImageError):
             raise DlupUnsupportedSlideError(f"Unsupported file: {wsi_file_path}")
 
-        return cls(wsi, str(wsi_file_path) if identifier is None else identifier)
+        return cls(wsi, str(wsi_file_path) if identifier is None else identifier, reading_method=reading_method)
 
     def read_region(
         self,
@@ -255,6 +260,19 @@ class SlideImage:
     def get_scaled_view(self, scaling: _GenericNumber) -> _SlideImageRegionView:
         """Returns a RegionView at a specific level."""
         return _SlideImageRegionView(self, scaling)
+    
+    def get_thumbnail_cucim(self, size: Tuple[int, int] = (512, 512)) -> PIL.Image.Image:
+        tile = self._openslide_wsi.read_region([(0, 0)], self._openslide_wsi.resolutions['level_dimensions'][3], level=3, num_workers=2)
+        tile = np.asarray(tile, dtype=int)
+        
+        # Apply on solid background
+        # Find function to get backgroundcolor
+        # bg_color = '#' + self.properties.get(PROPERTY_NAME_BACKGROUND_COLOR, 'ffffff')
+
+        bg_color = (0,0,0)
+        thumb = PIL.Image.fromarray(np.uint8(tile)).convert('RGB')
+        thumb.thumbnail(size)
+        return thumb
 
     def get_thumbnail(self, size: Tuple[int, int] = (512, 512)) -> PIL.Image.Image:
         """Returns an RGB numpy thumbnail for the current slide.
@@ -264,7 +282,11 @@ class SlideImage:
         size :
             Maximum bounding box for the thumbnail expressed as (width, height).
         """
-        return self._openslide_wsi.get_thumbnail(size)
+        
+        if self._reading_method == "openslide":
+            return self._openslide_wsi.get_thumbnail(size)
+        elif self._reading_method == "cucim":
+            return self.get_thumbnail_cucim(size)
 
     @property
     def thumbnail(self) -> PIL.Image.Image:
@@ -279,17 +301,27 @@ class SlideImage:
     @property
     def properties(self) -> dict:
         """Returns any extra associated properties with the image."""
-        return self._openslide_wsi.properties
+        if self._reading_method == "openslide":
+            return self._openslide_wsi.properties
+        elif self._reading_method == "cucim":
+            return self._openslide_wsi.metadata
 
     @property
     def vendor(self) -> str:
         """Returns the scanner vendor."""
-        return self.properties["openslide.vendor"]
+
+        if self._reading_method == "openslide":
+            return self._openslide_wsi.properties["openslide.vendor"]
+        elif self._reading_method == "cucim":
+            return list(self._openslide_wsi.metadata.keys())[0]
 
     @property
     def size(self) -> Tuple[int, int]:
         """Returns the highest resolution image size in pixels."""
-        return self._openslide_wsi.dimensions
+        if self._reading_method == "openslide":
+            return self._openslide_wsi.dimensions
+        elif self._reading_method == "cucim":
+            return self._openslide_wsi.resolutions['level_dimensions'][0]
 
     @property
     def mpp(self) -> float:
@@ -299,7 +331,11 @@ class SlideImage:
     @property
     def magnification(self) -> int:
         """Returns the objective power at which the WSI was sampled."""
-        return int(self._openslide_wsi.properties[openslide.PROPERTY_NAME_OBJECTIVE_POWER])
+        if self._reading_method == "openslide":
+            return int(self._openslide_wsi.properties[openslide.PROPERTY_NAME_OBJECTIVE_POWER])
+        elif self._reading_method == "cucim":
+            # TODO: Retrieve the name for this cucim metadata feature.
+            return 0
 
     @property
     def aspect_ratio(self) -> float:

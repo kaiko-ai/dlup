@@ -153,7 +153,7 @@ class SlideImageDatasetBase(Dataset[T_co]):
         crop: bool = True,
         mask: Optional[np.ndarray] = None,
         mask_threshold: float = 0.1,
-        transform: Optional[Callable] = None,
+        transform: Optional[Callable] = None
     ):
         """
         Parameters
@@ -315,6 +315,7 @@ class TiledROIsSlideImageDataset(SlideImageDatasetBase[RegionFromSlideDatasetSam
         mask: Optional[np.ndarray] = None,
         mask_threshold: float = 0.1,
         transform: Optional[Callable] = None,
+        reading_method: str = "openslide"
     ):
         """Function to be used to tile a WSI on-the-fly.
         Parameters
@@ -337,6 +338,8 @@ class TiledROIsSlideImageDataset(SlideImageDatasetBase[RegionFromSlideDatasetSam
             0 every region is discarded, 1 requires the whole region to be foreground.
         transform :
             Tansform to be applied to the sample
+        reading_method :
+            Library to use to read WSI files.
 
         Example
         -------
@@ -348,7 +351,7 @@ class TiledROIsSlideImageDataset(SlideImageDatasetBase[RegionFromSlideDatasetSam
         Calling this dataset with an index will return a tile extracted straight from the WSI. This means tiling as
         pre-processing step is not required.
         """
-        with SlideImage.from_file_path(path) as slide_image:
+        with SlideImage.from_file_path(path, reading_method=reading_method) as slide_image:
             slide_level_size = slide_image.get_scaled_size(slide_image.get_scaling(mpp))
         grid = Grid.from_tiling(
             (0, 0),

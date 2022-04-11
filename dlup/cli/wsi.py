@@ -23,8 +23,9 @@ def tiling(args: argparse.Namespace):
     output_directory_path = args.output_directory_path
     tile_size = cast(Tuple[int, int], (args.tile_size,) * 2)
     tile_overlap = cast(Tuple[int, int], (args.tile_overlap,) * 2)
+    wsi_reading_image = args.wsi_reading_method
 
-    image = SlideImage.from_file_path(input_file_path)
+    image = SlideImage.from_file_path(input_file_path, reading_method=wsi_reading_image)
     mask = get_mask(slide=image, mask_func=AvailableMaskFunctions[args.mask_func])
 
     # the nparray and PIL.Image.size height and width order are flipped is as it would be as a PIL.Image.
@@ -49,6 +50,7 @@ def tiling(args: argparse.Namespace):
         tile_mode=args.mode,
         mask_threshold=args.foreground_threshold,
         transform=None,
+        reading_method=wsi_reading_image
     )
     num_tiles = len(dataset)
 
@@ -179,6 +181,12 @@ def register_parser(parser: argparse._SubParsersAction):
         "--num-workers",
         type=int,
         help="Number of parallel threads to run. None -> fully parallelized.",
+    )
+    tiling_parser.add_argument(
+        "--wsi-reading-method",
+        type=str,
+        default="openslide",
+        help="Library to use to read WSI files.",
     )
     tiling_parser.add_argument(
         "--do-not-save-tiles",

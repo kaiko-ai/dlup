@@ -49,6 +49,8 @@ setup(
         "tqdm",
         "pillow",
         "openslide-python",
+        "scipy",
+        "cupy-cuda110",
         "cucim"
     ],
     extras_require={
